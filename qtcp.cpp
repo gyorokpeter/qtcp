@@ -7,6 +7,10 @@
 #include <stdexcept>
 #include <mutex>
 #include <thread>
+#include <w32api.h>
+#undef _WIN32_WINNT
+#define _WIN32_WINNT Windows7
+#define WINVER Windows7
 #include <winsock2.h>
 #include <Ws2tcpip.h>
 #include <windows.h>
