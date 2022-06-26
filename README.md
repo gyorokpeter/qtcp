@@ -1,4 +1,4 @@
-# qtcpproxy
+# qtcp
 
 This is a library that can open raw TCP connections for a q process to communicate through. It serves the same purpose as my other project ```qtcpproxy``` but this is in-process.
 The reason I took so long to make this is that using sd1/sd0 (which is required for making proper worker threads) on Windows is not trivial.
