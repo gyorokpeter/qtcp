@@ -1,6 +1,6 @@
 {
     path:"/"sv -1_"/"vs ssr[;"\\";"/"]first -3#value .z.s;
-    .tcp.priv.lib:`$":",path,"/qtcp";
+    .tcp.priv.lib:`$":",path,"/qtcp_",string .z.o;
     .tcp.connect:.tcp.priv.lib 2:(`qtcp_connect;3);
     .tcp.listen:.tcp.priv.lib 2:(`qtcp_listen;2);
     .tcp.close:.tcp.priv.lib 2:(`qtcp_close;1);

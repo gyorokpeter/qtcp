@@ -2,6 +2,7 @@
 #define QTCP_HPP
 
 #include <string>
+#include <cstdint>
 
 void addConnection(const std::string &alias, const std::string &hoststr, const std::string &portstr);
 std::string addListener(const std::string &alias, const std::string &portstr);

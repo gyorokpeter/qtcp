@@ -3,11 +3,11 @@
 This is a library that can open raw TCP connections for a q process to communicate through. It serves the same purpose as my other project ```qtcpproxy``` but this is in-process.
 The reason I took so long to make this is that using sd1/sd0 (which is required for making proper worker threads) on Windows is not trivial.
 
-See tcp.q and test.q for example usage. The functions labelled as "callback" could be redefined to provide custom behavior.
+See tcp.q and test.q for example usage. The functions labelled as "callback" can be redefined to provide custom behavior.
 
 # build
 
-Windows only: run b.cmd (requires k.h and c.dll from the Kx website)
+Windows only: create `config.cmd` based on the example and run `b32.cmd` and/or `b64.cmd` (requires k.h and c.dll from the KxSystems/kdb project)
 
 # API
 
