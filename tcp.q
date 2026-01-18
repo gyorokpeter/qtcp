@@ -1,5 +1,8 @@
 {
     path:"/"sv -1_"/"vs ssr[;"\\";"/"]first -3#value .z.s;
+    system"l ",path,"/config.q";
+    muxlib:`$":",.tcp.sd1muxPath,"/sd1mux_wi",1_string .z.o;
+    (muxlib 2:(`kexport;1))[];
     .tcp.priv.lib:`$":",path,"/qtcp_",string .z.o;
     .tcp.connect:.tcp.priv.lib 2:(`qtcp_connect;3);
     .tcp.listen:.tcp.priv.lib 2:(`qtcp_listen;2);

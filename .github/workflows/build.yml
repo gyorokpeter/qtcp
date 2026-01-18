@@ -1,0 +1,45 @@
+name: qtcp
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ published ]
+
+jobs:
+  build-qtcp:
+    runs-on: windows-2025
+    steps:
+    - name: Project checkout
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - name: Checkout kx repo
+      uses: actions/checkout@v4
+      with:
+        repository: KxSystems/kdb
+        path: kdb
+    - name: Checkout sd1mux repo
+      uses: actions/checkout@v4
+      with:
+        repository: gyorokpeter/sd1mux
+        path: sd1mux
+    - name: Build
+      run: |
+        echo "set KX_KDB_PATH=%CD%\kdb" >config.cmd
+        echo "set SD1MUX_PATH=%CD%\sd1mux" >>config.cmd
+        echo "set PATH=C:\msys64\usr\bin;%PATH%" >>config.cmd
+        ./mklib64.cmd
+        ./b64.cmd
+    - name: Zip files
+      run: |
+        Compress-Archive -Path tcp.q, config.q.example, qtcp_w64.dll -DestinationPath qtcp_w64.zip
+      shell: pwsh
+    - name: Upload release
+      if: github.event_name == 'release'
+      env:
+        GITHUB_TOKEN: ${{ github.TOKEN }}
+      run: |
+        gh release upload ${{github.event.release.tag_name}} qtcp_w64.zip

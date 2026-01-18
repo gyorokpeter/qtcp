@@ -2,8 +2,6 @@
 #define QTCPK_HPP
 #include <string>
 
-void setPipeNotify(int handle);
-void unsetPipeNotify(int handle);
 void reportConnFailed(const std::string &alias, const std::string &msg);
 void reportConnSuccess(const std::string &alias, int handle);
 void reportListenSuccess(const std::string &alias, int protocol, int handle);

@@ -17,8 +17,7 @@
 #include <namedpipeapi.h>
 #include <iostream>
 #include "qtcpk.hpp"
-
-int dumb_socketpair(SOCKET socks[2], int make_overlapped);
+#include "sd1mux.h"
 
 namespace {
 
@@ -54,10 +53,11 @@ namespace {
             numBytesRead = recv(handle, buffer, bufferSize, 0);
         //} while (0<numBytesRead);
     }
+
 }
 
 class NetworkProcessor;
-std::unordered_map<SOCKET, std::shared_ptr<NetworkProcessor> > readPipeToClient;
+std::unordered_map<SOCKET, std::shared_ptr<NetworkProcessor> > sd1muxToClient;
 std::unordered_map<int, std::weak_ptr<NetworkProcessor> > handleToClient;
 
 class NetworkProcessor {
@@ -92,16 +92,28 @@ private:
     Protocol protocol;
     int protocolVersion;
     int handle;
+    int sd1mux_id;
+
+    void setPipeNotify() {
+        sd1mux_id = sd1mux_regCallback(pipeNotify);
+        if (sd1mux_id == -1) {
+            throw std::runtime_error("failed to register sd1mux callback");
+        }
+    }
+
+    void unsetPipeNotify() {
+        sd1mux_unregCallback(sd1mux_id);
+    }
 
     void init() {
         SOCKET socks[2];
-        if (dumb_socketpair(socks, 1) != 0) {
+        if (sd1mux_socketpair(socks) != 0) {
             throw std::runtime_error(niceWSAGetLastError());
         }
         hReadPipe = socks[0];
         hWritePipe = socks[1];
-        setPipeNotify(int(hReadPipe));
-        readPipeToClient[hReadPipe] = std::shared_ptr<NetworkProcessor>(this);
+        setPipeNotify();
+        sd1muxToClient[sd1mux_id] = std::shared_ptr<NetworkProcessor>(this);
         thread = std::thread(&NetworkProcessor::run, this);
     }
 
@@ -115,14 +127,14 @@ public:
     }
     ~NetworkProcessor() {
         thread.join();
-        unsetPipeNotify(int(hReadPipe));
+        unsetPipeNotify();
         handleToClient.erase(handle);
-        readPipeToClient.erase(hReadPipe);
+        sd1muxToClient.erase(sd1mux_id);
         if (closesocket(hReadPipe) != 0) std::cerr << "failed to close read pipe: " << niceWSAGetLastError() << std::endl;
         if (closesocket(hWritePipe) != 0) std::cerr << "failed to close write pipe: " << niceWSAGetLastError() << std::endl;
     }
 
-    SOCKET getReadPipe() const { return hReadPipe; }
+    SOCKET getSd1muxId() const { return sd1mux_id; }
 
     void processMessages() {    //runs in main thread
         std::lock_guard<std::mutex> lock(upMutex);
@@ -132,19 +144,19 @@ public:
                 case Msg::ConnFailed:
                     reportConnFailed(alias, std::string((char*)&msg.data[0], msg.data.size()));
                     std::cerr << "removing client on conn failed" << std::endl;
-                    readPipeToClient.erase(hReadPipe);
+                    sd1muxToClient.erase(sd1mux_id);
                     return;
                 case Msg::ConnSuccess:
-                    handleToClient[handle] = readPipeToClient[hReadPipe];
+                    handleToClient[handle] = sd1muxToClient[sd1mux_id];
                     reportConnSuccess(alias, handle);
                     break;
                 case Msg::ListenSuccess:
-                    handleToClient[handle] = readPipeToClient[hReadPipe];
+                    handleToClient[handle] = sd1muxToClient[sd1mux_id];
                     reportListenSuccess(alias, protocolVersion, handle);
                     break;
                 case Msg::Disconnect:
                     reportDisconnect(handle);
-                    readPipeToClient.erase(hReadPipe);
+                    sd1muxToClient.erase(sd1mux_id);
                     return;
                 case Msg::SendData:
                     reportMessage(handle, &msg.data[0], msg.data.size());
@@ -152,12 +164,12 @@ public:
                 case Msg::NewClient:{
                     int newClient = *(int*)&msg.data[0];
                     std::string hostname = std::string(msg.data.begin()+sizeof(int), msg.data.end());
-                    handleToClient[newClient] = readPipeToClient[(new NetworkProcessor(hostname+"."+std::to_string(newClient), NetworkProcessor::TCP, 0, newClient, false))->hReadPipe];
+                    handleToClient[newClient] = sd1muxToClient[(new NetworkProcessor(hostname+"."+std::to_string(newClient), NetworkProcessor::TCP, 0, newClient, false))->sd1mux_id];
                     reportNewClient(handle, newClient, hostname);
                     break;
                 }
                 case Msg::UdpListenSuccess:
-                    handleToClient[handle] = readPipeToClient[hReadPipe];
+                    handleToClient[handle] = sd1muxToClient[sd1mux_id];
                     reportUdpListenSuccess(alias, handle);
                     break;
                 case Msg::SendUdpData:{
@@ -174,8 +186,7 @@ public:
     }
 
     void notifyPipeUp() {
-        char buffer[1] = {0};
-        int result = send(hWritePipe, buffer, 1, 0);
+        sd1mux_notify(sd1mux_id);
     }
 
     void notifyPipeDown() {
@@ -500,7 +511,7 @@ void closeConnection(int handle) {
         throw std::runtime_error("client was destroyed but not removed from handleToClient?!");
     }
     client->reportDisconnectDown();
-    readPipeToClient.erase(client->getReadPipe());
+    sd1muxToClient.erase(client->getSd1muxId());
     reportDisconnect(handle);
 }
 
@@ -526,17 +537,16 @@ void sendUdpData(int handle, const std::string &hoststr, int port, const uint8_t
     client->sendUdpDataDown(hoststr, port, data, len);
 }
 
-std::shared_ptr<NetworkProcessor> getClientForPipe(SOCKET handle) {
-    auto item = readPipeToClient.find(handle);
-    if (item == readPipeToClient.end()) return {};
+std::shared_ptr<NetworkProcessor> getClientForSd1muxId(int id) {
+    auto item = sd1muxToClient.find(id);
+    if (item == sd1muxToClient.end()) return {};
     return item->second;
 }
 
-void pipeNotify(int handle) {
-    drainPipe(handle);
-    std::shared_ptr<NetworkProcessor> client = getClientForPipe(SOCKET(handle));
+void pipeNotify(int id) {
+    std::shared_ptr<NetworkProcessor> client = getClientForSd1muxId(id);
     if (!client) {
-        std::cerr << "pipeNotify called for invalid handle " << handle << std::endl;
+        std::cerr << "pipeNotify called for invalid id " << id << std::endl;
         return;
     }
     client->processMessages();

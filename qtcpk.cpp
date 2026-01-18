@@ -20,22 +20,6 @@ namespace {
         return kobj->t == -11?std::string(kobj->s):std::string((char*)kC(kobj),kobj->n);
     }
 
-    K pipeNotifyK(int handle) {
-        pipeNotify(handle);
-        return K(0);
-    }
-}
-
-void setPipeNotify(int handle) {
-    K result = sd1(-handle, pipeNotifyK);
-    if (result == nullptr) {
-        throw std::runtime_error("failed to install pipe notify handler");
-    }
-    r0(result);
-}
-
-void unsetPipeNotify(int handle) {
-    sd0x(handle, 0);
 }
 
 void reportConnFailed(const std::string &alias, const std::string &msg) {
